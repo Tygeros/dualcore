@@ -68,7 +68,14 @@ class BaseMission(models.Model):
         return delta_days + 1 if delta_days >= 0 else delta_days - 4
 
     def status_coefficient(self):
-        return -5 if self.status == "canceled" else 1
+        if self.status == "canceled":
+            return -5
+
+        elif self.status == "pending":
+            return 0
+
+        else:
+            return 1
 
     def base_current_points(self):
         return self.base_points() * self.difficulty.coefficient * self.priority.coefficient * self.status_coefficient()
