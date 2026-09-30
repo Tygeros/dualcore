@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-y3+6i8^)p6m$o62uiuz(dj%my^(!1)xk7i3k(0u+s^8d5!s139'
+SECRET_KEY = 'django-insecure-@vd+#0et7iuh=i-n62bnpfit8fy*0c08%_^=!!#%45%%4qkcuz'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -33,7 +33,10 @@ AUTH_USER_MODEL = "users.User"
 # Application definition
 
 INSTALLED_APPS = [
+    "base",
     "users",
+    "projects",
+    "tasks",
 
     "rest_framework",
 
