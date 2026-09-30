@@ -95,11 +95,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 #     }
 # }
 
-if os.environ.get("DATABASE_URL"):
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
     DATABASES = {
-        "default": dj_database_url.parse(
-            os.environ["DATABASE_URL"]
-        )
+        "default": dj_database_url.parse(DATABASE_URL)
     }
 else:
     DATABASES = {
