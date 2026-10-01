@@ -67,16 +67,42 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# CORS — single-user local frontend
+# CORS
+# Local (DEBUG=True): cho phép mọi origin
+# Production: whitelist frontend Render + localhost
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+        ",".join([
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://dualcore-frontend.onrender.com",
+        ]),
     ).split(",")
     if o.strip()
 ]
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -117,7 +143,6 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-
 
 
 
