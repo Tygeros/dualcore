@@ -28,7 +28,7 @@ export default function Menu() {
         <div>Tasks</div>
       </NavLink>
 
-      <NavLink className={({ isActive }) => isActive ? activeItemStyle : itemStyle}>
+      <NavLink to="/settings" className={({ isActive }) => isActive ? activeItemStyle : itemStyle}>
         <IoIosSettings className="text-2xl"/>
         <div>Settings</div>
       </NavLink>
