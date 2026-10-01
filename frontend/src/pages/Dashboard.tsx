@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
@@ -10,6 +10,15 @@ import {
 import type { Profile, Project, Task, TodayPoints } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
+import {
+  LineChart,
+  BarChart,
+  COLORS,
+} from "../components/charts/SimpleCharts";
+import {
+  buildDashboardSeries,
+  type RangeKey,
+} from "../utils/chartData";
 
 const ACCENT: Record<string, string> = {
   pending: "border-l-neutral-500",
@@ -17,6 +26,13 @@ const ACCENT: Record<string, string> = {
   completed: "border-l-emerald-400",
   canceled: "border-l-rose-400",
 };
+
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: "7d", label: "7 days" },
+  { key: "30d", label: "30 days" },
+  { key: "90d", label: "90 days" },
+  { key: "12m", label: "12 months" },
+];
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -26,6 +42,7 @@ export default function Dashboard() {
   const [today, setToday] = useState<TodayPoints | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [range, setRange] = useState<RangeKey>("30d");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +77,54 @@ export default function Dashboard() {
     };
   }, []);
 
+  const series = useMemo(
+    () =>
+      buildDashboardSeries(
+        projects,
+        tasks,
+        range,
+        profile?.level ?? 0,
+        profile?.exp ?? 0
+      ),
+    [projects, tasks, range, profile]
+  );
+
+  const pointsSeries = useMemo(
+    () => series.map((b) => ({ label: b.label, value: Math.round(b.points * 10) / 10 })),
+    [series]
+  );
+
+  const levelSeries = useMemo(
+    () => series.map((b) => ({ label: b.label, value: b.level })),
+    [series]
+  );
+
+  const activitySeries = useMemo(
+    () =>
+      series.map((b) => ({
+        label: b.label,
+        values: [
+          b.projectsCreated,
+          b.projectsCompleted,
+          b.tasksCreated,
+          b.tasksCompleted,
+        ],
+      })),
+    [series]
+  );
+
+  const totalPointsInRange = useMemo(
+    () => series.reduce((s, b) => s + b.points, 0),
+    [series]
+  );
+
   if (loading) return <Loading />;
   if (error) {
     return (
       <div className="p-4 text-red-400 text-sm">
         {error}
         <p className="mt-2 text-neutral-500">
-          Kiểm tra backend đang chạy và CORS / VITE_API_URL.
+          Check that the backend is running and CORS / VITE_API_URL are set.
         </p>
       </div>
     );
@@ -166,14 +224,90 @@ export default function Dashboard() {
         </div>
         {!metCommit && commit > 0 && (
           <p className="text-xs text-neutral-500 mt-2">
-            Còn {(commit - todayPts).toFixed(1)} pts để đạt commit hôm nay.
+            {(commit - todayPts).toFixed(1)} pts left to hit today&apos;s commit.
           </p>
         )}
         {metCommit && (
           <p className="text-xs text-emerald-500/80 mt-2">
-            Đã đạt commit points hôm nay.
+            Daily commit points reached.
           </p>
         )}
+      </section>
+
+      {/* Charts */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">
+            Analytics
+          </h2>
+          <div className="flex rounded-xl border border-neutral-800 overflow-hidden bg-neutral-900/60">
+            {RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setRange(opt.key)}
+                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  range === opt.key
+                    ? "bg-sky-600 text-white"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Points over time */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-medium text-neutral-200">
+              Points over time
+            </h3>
+            <span className="text-xs text-amber-400/90 font-medium tabular-nums">
+              Σ {totalPointsInRange.toFixed(1)} pts
+            </span>
+          </div>
+          <p className="text-[11px] text-neutral-500 mb-2">
+            Points from projects/tasks completed or canceled in this period
+          </p>
+          <LineChart data={pointsSeries} color={COLORS.amber} />
+        </div>
+
+        {/* Level over time */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-medium text-neutral-200">
+              Level over time
+            </h3>
+            <span className="text-xs text-violet-400 font-medium">
+              Lv {profile?.level ?? 0}
+            </span>
+          </div>
+          <p className="text-[11px] text-neutral-500 mb-2">
+            Estimated level from completion points (EXP replay)
+          </p>
+          <LineChart data={levelSeries} color={COLORS.violet} />
+        </div>
+
+        {/* Created / completed */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-200 mb-1">
+            Created &amp; completed
+          </h3>
+          <p className="text-[11px] text-neutral-500 mb-2">
+            Projects and tasks created vs completed in this period
+          </p>
+          <BarChart
+            data={activitySeries}
+            series={[
+              { name: "Proj created", color: COLORS.sky },
+              { name: "Proj done", color: COLORS.emerald },
+              { name: "Task created", color: COLORS.violet },
+              { name: "Task done", color: COLORS.amber },
+            ]}
+          />
+        </div>
       </section>
 
       {/* Quick add */}
