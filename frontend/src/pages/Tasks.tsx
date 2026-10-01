@@ -97,9 +97,16 @@ export default function Tasks() {
     setProjects(projs);
     setPriorities(pris);
     setDifficulties(diffs);
+    const activeProjs = projs.filter(
+      (p) => p.status === "pending" || p.status === "in_progress"
+    );
     setForm((f) => ({
       ...f,
-      project: f.project || projs[0]?.id || 0,
+      project:
+        f.project ||
+        activeProjs[0]?.id ||
+        projs[0]?.id ||
+        0,
       priority:
         f.priority ||
         pris.find((p) => p.coefficient === 1)?.id ||
@@ -234,9 +241,20 @@ export default function Tasks() {
     return list.find((l) => l.id === id)?.name ?? `#${id}`;
   }
 
-  /** Parent options: only tasks in selected project (roots + nested ok). */
+  const isActiveStatus = (s: Status) =>
+    s === "pending" || s === "in_progress";
+
+  /** Projects selectable in create form: only pending / in_progress. */
+  const activeProjects = useMemo(
+    () => projects.filter((p) => isActiveStatus(p.status)),
+    [projects]
+  );
+
+  /** Parent options: active tasks in selected project (tree order). */
   const parentOptions = useMemo(() => {
-    const inProject = tasks.filter((t) => t.project === form.project);
+    const inProject = tasks.filter(
+      (t) => t.project === form.project && isActiveStatus(t.status)
+    );
     return flattenTree(buildTaskTree(inProject));
   }, [tasks, form.project]);
 
@@ -353,11 +371,17 @@ export default function Tasks() {
                 }
                 required
               >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
+                {activeProjects.length === 0 ? (
+                  <option value={0} disabled>
+                    Không có project đang mở
                   </option>
-                ))}
+                ) : (
+                  activeProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))
+                )}
               </select>
             </label>
             <label className="text-xs text-neutral-400 space-y-1 block">
@@ -582,20 +606,23 @@ export default function Tasks() {
                               </option>
                             ))}
                           </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForm((f) => ({
-                                ...f,
-                                project: t.project,
-                                parent_task: t.id,
-                              }));
-                              setShowForm(true);
-                            }}
-                            className="text-xs text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg hover:bg-sky-500/10 transition-colors"
-                          >
-                            + Subtask
-                          </button>
+                          {(t.status === "pending" ||
+                            t.status === "in_progress") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm((f) => ({
+                                  ...f,
+                                  project: t.project,
+                                  parent_task: t.id,
+                                }));
+                                setShowForm(true);
+                              }}
+                              className="text-xs text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg hover:bg-sky-500/10 transition-colors"
+                            >
+                              + Subtask
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openTaskChildren(t)}
