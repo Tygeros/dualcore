@@ -17,6 +17,16 @@ export interface Profile {
   exp_threshold: number;
 }
 
+export interface TodayPoints {
+  today_points: number;
+  commit_points: number;
+  progress: number;
+  date: string;
+  projects_count?: number;
+  tasks_count?: number;
+}
+
+
 export interface Project {
   id: number;
   owner: number;

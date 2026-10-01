@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   getTasks,
@@ -19,6 +19,7 @@ import type {
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
+import { groupTasksByProject, flattenTree } from "../utils/taskTree";
 
 const STATUS_OPTIONS: Status[] = [
   "pending",
@@ -101,6 +102,11 @@ export default function Tasks() {
     loadTasks();
   }, [loadTasks]);
 
+  const groups = useMemo(
+    () => groupTasksByProject(tasks, projects),
+    [tasks, projects]
+  );
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim() || !form.project || !form.priority || !form.difficulty)
@@ -137,6 +143,8 @@ export default function Tasks() {
         { status };
       if (status === "completed" || status === "canceled") {
         payload.terminated_date = new Date().toISOString().slice(0, 10);
+      } else {
+        payload.terminated_date = null;
       }
       await updateTask(id, payload);
       await loadTasks();
@@ -155,13 +163,12 @@ export default function Tasks() {
     }
   }
 
-  function projectName(id: number) {
-    return projects.find((p) => p.id === id)?.name ?? `#${id}`;
-  }
-
   function levelName(list: Level[], id: number) {
     return list.find((l) => l.id === id)?.name ?? `#${id}`;
   }
+
+  /** Parent options: only tasks in selected project (roots + nested ok). */
+  const parentOptions = tasks.filter((t) => t.project === form.project);
 
   return (
     <div className="p-4 pb-24 max-w-3xl mx-auto space-y-4">
@@ -176,7 +183,6 @@ export default function Tasks() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <select
           className="rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white"
@@ -239,7 +245,11 @@ export default function Tasks() {
                 className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.project}
                 onChange={(e) =>
-                  setForm({ ...form, project: Number(e.target.value) })
+                  setForm({
+                    ...form,
+                    project: Number(e.target.value),
+                    parent_task: null,
+                  })
                 }
                 required
               >
@@ -251,7 +261,7 @@ export default function Tasks() {
               </select>
             </label>
             <label className="text-xs text-neutral-400 space-y-1 block">
-              Parent task (optional)
+              Parent task
               <select
                 className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.parent_task ?? ""}
@@ -264,14 +274,13 @@ export default function Tasks() {
                   })
                 }
               >
-                <option value="">None</option>
-                {tasks
-                  .filter((t) => t.project === form.project)
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
+                <option value="">None (root)</option>
+                {parentOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {"  ".repeat(Math.max(0, (t.task_level || 1) - 1))}
+                    {t.name}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -350,76 +359,111 @@ export default function Tasks() {
 
       {loading ? (
         <Loading />
-      ) : tasks.length === 0 ? (
+      ) : groups.length === 0 ? (
         <EmptyState
           title="Chưa có task nào"
           description="Tạo task hoặc đổi bộ lọc."
         />
       ) : (
-        <ul className="space-y-3">
-          {tasks.map((t) => (
-            <li
-              key={t.id}
-              className="rounded-xl bg-neutral-900 border border-neutral-800 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold truncate">
-                    {t.parent_task ? (
-                      <span className="text-neutral-500 mr-1">↳</span>
-                    ) : null}
-                    {t.name}
-                  </h3>
-                  {t.description && (
-                    <p className="text-sm text-neutral-400 mt-1 line-clamp-2">
-                      {t.description}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-neutral-500">
-                    <span>{projectName(t.project)}</span>
-                    <span>·</span>
-                    <span>L{t.task_level}</span>
-                    <span>·</span>
-                    <span>{levelName(priorities, t.priority)}</span>
-                    <span>·</span>
-                    <span>{levelName(difficulties, t.difficulty)}</span>
-                    <span>·</span>
-                    <span>{t.current_points?.toFixed(1)} pts</span>
-                    {t.due_date && (
-                      <>
-                        <span>·</span>
-                        <span>due {t.due_date}</span>
-                      </>
-                    )}
-                  </div>
+        <div className="space-y-6">
+          {groups.map((group) => {
+            const rows = flattenTree(group.roots);
+            return (
+              <section key={group.projectId}>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide truncate">
+                    {group.project?.name ?? `Project #${group.projectId}`}
+                  </h2>
+                  <span className="text-xs text-neutral-600">
+                    {rows.length} task{rows.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
-                <StatusBadge status={t.status} />
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                <select
-                  className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-1 text-xs text-white"
-                  value={t.status}
-                  onChange={(e) =>
-                    handleStatusChange(t.id, e.target.value as Status)
-                  }
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
+                <ul className="space-y-2">
+                  {rows.map(({ task: t, depth }) => (
+                    <li
+                      key={t.id}
+                      className="rounded-xl bg-neutral-900 border border-neutral-800 p-3"
+                      style={{ marginLeft: depth * 16 }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            {depth > 0 && (
+                              <span
+                                className="text-neutral-600 shrink-0 select-none"
+                                aria-hidden
+                              >
+                                └
+                              </span>
+                            )}
+                            <h3 className="font-semibold truncate">{t.name}</h3>
+                          </div>
+                          {t.description && (
+                            <p className="text-sm text-neutral-400 mt-1 line-clamp-2">
+                              {t.description}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5 text-xs text-neutral-500">
+                            <span>L{t.task_level}</span>
+                            <span>·</span>
+                            <span>{levelName(priorities, t.priority)}</span>
+                            <span>·</span>
+                            <span>{levelName(difficulties, t.difficulty)}</span>
+                            <span>·</span>
+                            <span>{t.current_points?.toFixed(1)} pts</span>
+                            {t.due_date && (
+                              <>
+                                <span>·</span>
+                                <span>due {t.due_date}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <StatusBadge status={t.status} />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <select
+                          className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-1 text-xs text-white"
+                          value={t.status}
+                          onChange={(e) =>
+                            handleStatusChange(t.id, e.target.value as Status)
+                          }
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({
+                              ...f,
+                              project: t.project,
+                              parent_task: t.id,
+                            }));
+                            setShowForm(true);
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1"
+                        >
+                          + Subtask
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(t.id)}
+                          className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
                   ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(t.id)}
-                  className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
     </div>
   );

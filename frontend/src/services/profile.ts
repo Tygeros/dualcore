@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Profile } from "../types";
+import type { Profile, TodayPoints } from "../types";
 
 export async function getProfiles(): Promise<Profile[]> {
   return api.get<Profile[]>("/profiles/");
@@ -16,4 +16,8 @@ export async function updateProfile(
   data: Partial<Pick<Profile, "display_name" | "commit_points">>
 ): Promise<Profile> {
   return api.patch<Profile>(`/profiles/${id}/`, data);
+}
+
+export async function getTodayPoints(): Promise<TodayPoints> {
+  return api.get<TodayPoints>("/profiles/today-points/");
 }
