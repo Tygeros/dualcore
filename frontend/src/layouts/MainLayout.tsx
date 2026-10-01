@@ -5,10 +5,13 @@ import Menu from "./Menu";
 
 export default function MainLayout() {
   return (
-    <div>
+    <div className="min-h-screen flex flex-col">
       <Header />
-      <Outlet />
+      <main className="flex-1">
+        <Outlet />
+      </main>
       <Menu />
     </div>
-  )
+  );
 }
+

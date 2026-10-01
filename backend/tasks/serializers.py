@@ -18,7 +18,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "project",
-            "parent_task", 
+            "parent_task",
             "task_level",
             "priority",
             "difficulty",
@@ -28,8 +28,10 @@ class TaskSerializer(serializers.ModelSerializer):
             "current_points",
             "final_points",
             "created_at",
-            "updated_at"
+            "updated_at",
         ]
+        read_only_fields = ["owner"]
+
 
     def update(self, instance, validated_data):
         old_status = instance.status

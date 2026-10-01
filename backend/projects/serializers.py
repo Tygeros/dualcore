@@ -6,7 +6,7 @@ from base.services import up_level
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    current_points = serializers.SerializerMethodField() 
+    current_points = serializers.SerializerMethodField()
     final_points = serializers.SerializerMethodField()
 
     class Meta:
@@ -25,7 +25,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "final_points",
             "created_at",
             "updated_at",
-        ] 
+        ]
+        read_only_fields = ["owner"]
+ 
 
     def update(self, instance, validated_data):
         old_status = instance.status

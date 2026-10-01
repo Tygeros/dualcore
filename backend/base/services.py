@@ -11,7 +11,7 @@ def up_level(profile, bonus_exp):
     current_exp = profile.exp
 
     if bonus_exp < 0:
-        return (current_level, current_exp + bonnus_exp)
+        return (current_level, current_exp + bonus_exp)
 
     ref_exp_threshold = exp_to_next_level(current_level)
     ref_exp = current_exp + bonus_exp
