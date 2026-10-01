@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   getTasks,
@@ -19,7 +20,12 @@ import type {
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
-import { groupTasksByProject, flattenTree } from "../utils/taskTree";
+import {
+  groupTasksByProject,
+  flattenTree,
+  findSubtree,
+  buildTaskTree,
+} from "../utils/taskTree";
 
 const STATUS_OPTIONS: Status[] = [
   "pending",
@@ -28,13 +34,36 @@ const STATUS_OPTIONS: Status[] = [
   "canceled",
 ];
 
+const ACCENT: Record<Status, string> = {
+  pending: "border-l-neutral-500",
+  in_progress: "border-l-sky-400",
+  completed: "border-l-emerald-400",
+  canceled: "border-l-rose-400",
+};
+
+const ACCENT_BG: Record<Status, string> = {
+  pending: "hover:bg-neutral-800/50",
+  in_progress: "hover:bg-sky-950/30",
+  completed: "hover:bg-emerald-950/20",
+  canceled: "hover:bg-rose-950/20",
+};
+
 export default function Tasks() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [priorities, setPriorities] = useState<Level[]>([]);
   const [difficulties, setDifficulties] = useState<Level[]>([]);
-  const [filterProject, setFilterProject] = useState<number | "">("");
+  const [filterProject, setFilterProject] = useState<number | "">(() => {
+    const p = searchParams.get("project");
+    return p ? Number(p) : "";
+  });
   const [filterStatus, setFilterStatus] = useState<Status | "">("");
+  const [filterParent, setFilterParent] = useState<number | null>(() => {
+    const p = searchParams.get("parent");
+    return p ? Number(p) : null;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -50,6 +79,14 @@ export default function Tasks() {
     status: "pending",
     due_date: null,
   });
+
+  // Sync URL → state when user lands with query params
+  useEffect(() => {
+    const p = searchParams.get("project");
+    const parent = searchParams.get("parent");
+    if (p) setFilterProject(Number(p));
+    setFilterParent(parent ? Number(parent) : null);
+  }, [searchParams]);
 
   const loadMeta = useCallback(async () => {
     const [projs, pris, diffs] = await Promise.all([
@@ -102,10 +139,40 @@ export default function Tasks() {
     loadTasks();
   }, [loadTasks]);
 
-  const groups = useMemo(
-    () => groupTasksByProject(tasks, projects),
-    [tasks, projects]
-  );
+  const groups = useMemo(() => {
+    const allGroups = groupTasksByProject(tasks, projects);
+    if (filterParent == null) return allGroups;
+
+    // Show only the clicked task as root + its children
+    return allGroups
+      .map((g) => {
+        const node = findSubtree(g.roots, filterParent);
+        if (!node) return null;
+        return {
+          ...g,
+          roots: [node],
+        };
+      })
+      .filter(Boolean) as typeof allGroups;
+  }, [tasks, projects, filterParent]);
+
+  const parentTaskInfo = useMemo(() => {
+    if (filterParent == null) return null;
+    return tasks.find((t) => t.id === filterParent) ?? null;
+  }, [tasks, filterParent]);
+
+  function updateFilters(project: number | "", parent: number | null) {
+    setFilterProject(project);
+    setFilterParent(parent);
+    const next = new URLSearchParams();
+    if (project !== "") next.set("project", String(project));
+    if (parent != null) next.set("parent", String(parent));
+    setSearchParams(next, { replace: true });
+  }
+
+  function openTaskChildren(t: Task) {
+    navigate(`/tasks?project=${t.project}&parent=${t.id}`);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -168,28 +235,52 @@ export default function Tasks() {
   }
 
   /** Parent options: only tasks in selected project (roots + nested ok). */
-  const parentOptions = tasks.filter((t) => t.project === form.project);
+  const parentOptions = useMemo(() => {
+    const inProject = tasks.filter((t) => t.project === form.project);
+    return flattenTree(buildTaskTree(inProject));
+  }, [tasks, form.project]);
 
   return (
     <div className="p-4 pb-24 max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Tasks</h1>
+        <h1 className="text-xl font-bold tracking-tight">Tasks</h1>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium"
+          className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium shadow-lg shadow-blue-900/30 transition-all active:scale-[0.98]"
         >
           {showForm ? "Cancel" : "+ New"}
         </button>
       </div>
 
+      {/* Breadcrumb when drilling into a parent task */}
+      {filterParent != null && (
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <button
+            type="button"
+            onClick={() => updateFilters(filterProject, null)}
+            className="text-sky-400 hover:text-sky-300 transition-colors"
+          >
+            {filterProject !== ""
+              ? projects.find((p) => p.id === filterProject)?.name ?? "Project"
+              : "All tasks"}
+          </button>
+          <span className="text-neutral-600">/</span>
+          <span className="text-neutral-300 font-medium truncate">
+            {parentTaskInfo?.name ?? `Task #${filterParent}`}
+          </span>
+          <span className="text-xs text-neutral-500 ml-1">(task con)</span>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <select
-          className="rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white"
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
           value={filterProject}
-          onChange={(e) =>
-            setFilterProject(e.target.value === "" ? "" : Number(e.target.value))
-          }
+          onChange={(e) => {
+            const v = e.target.value === "" ? "" : Number(e.target.value);
+            updateFilters(v, null);
+          }}
         >
           <option value="">All projects</option>
           {projects.map((p) => (
@@ -199,7 +290,7 @@ export default function Tasks() {
           ))}
         </select>
         <select
-          className="rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white"
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
           value={filterStatus}
           onChange={(e) =>
             setFilterStatus((e.target.value || "") as Status | "")
@@ -212,10 +303,19 @@ export default function Tasks() {
             </option>
           ))}
         </select>
+        {filterParent != null && (
+          <button
+            type="button"
+            onClick={() => updateFilters(filterProject, null)}
+            className="rounded-xl border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+          >
+            Clear parent filter
+          </button>
+        )}
       </div>
 
       {error && (
-        <div className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
+        <div className="text-sm text-red-400 bg-red-950/40 border border-red-900/60 rounded-xl px-3 py-2">
           {error}
         </div>
       )}
@@ -223,17 +323,17 @@ export default function Tasks() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl bg-neutral-900 border border-neutral-800 p-4 space-y-3"
+          className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4 space-y-3 shadow-xl shadow-black/20"
         >
           <input
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 transition-colors"
             placeholder="Task name *"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
           <textarea
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-blue-500 min-h-[72px]"
+            className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 min-h-[72px] transition-colors"
             placeholder="Description"
             value={form.description || ""}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -242,7 +342,7 @@ export default function Tasks() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Project *
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.project}
                 onChange={(e) =>
                   setForm({
@@ -263,7 +363,7 @@ export default function Tasks() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Parent task
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.parent_task ?? ""}
                 onChange={(e) =>
                   setForm({
@@ -275,10 +375,9 @@ export default function Tasks() {
                 }
               >
                 <option value="">None (root)</option>
-                {parentOptions.map((t) => (
+                {parentOptions.map(({ task: t, depth }) => (
                   <option key={t.id} value={t.id}>
-                    {"  ".repeat(Math.max(0, (t.task_level || 1) - 1))}
-                    {t.name}
+                    {"—".repeat(depth)} {t.name}
                   </option>
                 ))}
               </select>
@@ -288,7 +387,7 @@ export default function Tasks() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Priority
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.priority}
                 onChange={(e) =>
                   setForm({ ...form, priority: Number(e.target.value) })
@@ -304,7 +403,7 @@ export default function Tasks() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Difficulty
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.difficulty}
                 onChange={(e) =>
                   setForm({ ...form, difficulty: Number(e.target.value) })
@@ -322,7 +421,7 @@ export default function Tasks() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Status
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.status || "pending"}
                 onChange={(e) =>
                   setForm({ ...form, status: e.target.value as Status })
@@ -339,7 +438,7 @@ export default function Tasks() {
               Due date
               <input
                 type="date"
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.due_date || ""}
                 onChange={(e) =>
                   setForm({ ...form, due_date: e.target.value || null })
@@ -350,7 +449,7 @@ export default function Tasks() {
           <button
             type="submit"
             disabled={submitting || !form.project}
-            className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium"
+            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium shadow-lg shadow-blue-900/20 transition-all"
           >
             {submitting ? "Creating..." : "Create task"}
           </button>
@@ -361,104 +460,160 @@ export default function Tasks() {
         <Loading />
       ) : groups.length === 0 ? (
         <EmptyState
-          title="Chưa có task nào"
-          description="Tạo task hoặc đổi bộ lọc."
+          title={
+            filterParent != null
+              ? "Task này chưa có task con"
+              : "Chưa có task nào"
+          }
+          description={
+            filterParent != null
+              ? "Thêm subtask hoặc quay lại danh sách."
+              : "Tạo task hoặc đổi bộ lọc."
+          }
         />
       ) : (
         <div className="space-y-6">
           {groups.map((group) => {
             const rows = flattenTree(group.roots);
+            // When filtering by parent, the root is the parent itself —
+            // show children with relative depth, or whole subtree
             return (
               <section key={group.projectId}>
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide truncate">
-                    {group.project?.name ?? `Project #${group.projectId}`}
-                  </h2>
-                  <span className="text-xs text-neutral-600">
-                    {rows.length} task{rows.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <ul className="space-y-2">
-                  {rows.map(({ task: t, depth }) => (
-                    <li
-                      key={t.id}
-                      className="rounded-xl bg-neutral-900 border border-neutral-800 p-3"
-                      style={{ marginLeft: depth * 16 }}
+                {filterParent == null && (
+                  <div className="flex items-center gap-2 mb-2.5 px-1">
+                    <button
+                      type="button"
+                      onClick={() => updateFilters(group.projectId, null)}
+                      className="text-sm font-semibold text-neutral-300 uppercase tracking-wide truncate hover:text-white transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            {depth > 0 && (
-                              <span
-                                className="text-neutral-600 shrink-0 select-none"
-                                aria-hidden
-                              >
-                                └
-                              </span>
-                            )}
-                            <h3 className="font-semibold truncate">{t.name}</h3>
-                          </div>
-                          {t.description && (
-                            <p className="text-sm text-neutral-400 mt-1 line-clamp-2">
-                              {t.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5 text-xs text-neutral-500">
-                            <span>L{t.task_level}</span>
-                            <span>·</span>
-                            <span>{levelName(priorities, t.priority)}</span>
-                            <span>·</span>
-                            <span>{levelName(difficulties, t.difficulty)}</span>
-                            <span>·</span>
-                            <span>{t.current_points?.toFixed(1)} pts</span>
-                            {t.due_date && (
-                              <>
-                                <span>·</span>
-                                <span>due {t.due_date}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <StatusBadge status={t.status} />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <select
-                          className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-1 text-xs text-white"
-                          value={t.status}
-                          onChange={(e) =>
-                            handleStatusChange(t.id, e.target.value as Status)
+                      {group.project?.name ?? `Project #${group.projectId}`}
+                    </button>
+                    <span className="text-xs text-neutral-600 tabular-nums">
+                      {rows.length}
+                    </span>
+                  </div>
+                )}
+                <ul className="space-y-2.5">
+                  {rows.map(({ task: t, depth }) => {
+                    // When parent filter is on, skip rendering the parent as a nested card
+                    // if we only want children — but user asked for "task con",
+                    // showing parent as context header is fine; still show full subtree.
+                    const isFocusRoot =
+                      filterParent != null && t.id === filterParent && depth === 0;
+                    return (
+                      <li
+                        key={t.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openTaskChildren(t)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openTaskChildren(t);
                           }
+                        }}
+                        className={`group relative rounded-2xl border border-neutral-800/80 border-l-[3px] ${ACCENT[t.status]} bg-neutral-900/70 p-3.5 cursor-pointer
+                          ${ACCENT_BG[t.status]} hover:border-neutral-700 hover:shadow-lg hover:shadow-black/30
+                          active:scale-[0.995] transition-all duration-200
+                          ${isFocusRoot ? "ring-1 ring-sky-500/30" : ""}`}
+                        style={{ marginLeft: depth * 14 }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {depth > 0 && (
+                                <span
+                                  className="text-neutral-600 shrink-0 select-none text-xs"
+                                  aria-hidden
+                                >
+                                  └
+                                </span>
+                              )}
+                              <h3 className="font-semibold text-[14px] tracking-tight truncate group-hover:text-white transition-colors">
+                                {t.name}
+                              </h3>
+                              {isFocusRoot && (
+                                <span className="text-[10px] uppercase tracking-wider text-sky-400/80 bg-sky-500/10 px-1.5 py-0.5 rounded">
+                                  focus
+                                </span>
+                              )}
+                            </div>
+                            {t.description && (
+                              <p className="text-sm text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
+                                {t.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[11px]">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
+                                L{t.task_level}
+                              </span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
+                                {levelName(priorities, t.priority)}
+                              </span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
+                                {levelName(difficulties, t.difficulty)}
+                              </span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400/90 font-medium">
+                                {t.current_points?.toFixed(1)} pts
+                              </span>
+                              {t.due_date && (
+                                <span className="text-neutral-500">
+                                  due {t.due_date}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <StatusBadge status={t.status} />
+                        </div>
+                        <div
+                          className="flex flex-wrap items-center gap-2 mt-2.5 pt-2.5 border-t border-neutral-800/60"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {STATUS_OPTIONS.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm((f) => ({
-                              ...f,
-                              project: t.project,
-                              parent_task: t.id,
-                            }));
-                            setShowForm(true);
-                          }}
-                          className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1"
-                        >
-                          + Subtask
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(t.id)}
-                          className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                          <select
+                            className="rounded-lg bg-neutral-950/80 border border-neutral-700/80 px-2 py-1 text-xs text-white focus:border-blue-500 outline-none"
+                            value={t.status}
+                            onChange={(e) =>
+                              handleStatusChange(t.id, e.target.value as Status)
+                            }
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((f) => ({
+                                ...f,
+                                project: t.project,
+                                parent_task: t.id,
+                              }));
+                              setShowForm(true);
+                            }}
+                            className="text-xs text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg hover:bg-sky-500/10 transition-colors"
+                          >
+                            + Subtask
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openTaskChildren(t)}
+                            className="text-xs text-violet-400 hover:text-violet-300 px-2 py-1 rounded-lg hover:bg-violet-500/10 transition-colors"
+                          >
+                            Children →
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(t.id)}
+                            className="text-xs text-rose-400/80 hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors ml-auto"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             );

@@ -87,3 +87,16 @@ export function flattenTree(
   }
   return out;
 }
+
+/** Find a node by id in a forest; returns that node (with its subtree) or null. */
+export function findSubtree(
+  roots: TaskNode[],
+  taskId: number
+): TaskNode | null {
+  for (const node of roots) {
+    if (node.id === taskId) return node;
+    const found = findSubtree(node.children, taskId);
+    if (found) return found;
+  }
+  return null;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   getCurrentProfile,
@@ -11,7 +11,15 @@ import type { Profile, Project, Task, TodayPoints } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 
+const ACCENT: Record<string, string> = {
+  pending: "border-l-neutral-500",
+  in_progress: "border-l-sky-400",
+  completed: "border-l-emerald-400",
+  canceled: "border-l-rose-400",
+};
+
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -85,10 +93,10 @@ export default function Dashboard() {
   return (
     <div className="p-4 pb-24 space-y-6 max-w-3xl mx-auto">
       {/* Profile card */}
-      <section className="rounded-xl bg-neutral-900 border border-neutral-800 p-4">
+      <section className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-900/60 border border-neutral-800 p-4 shadow-lg shadow-black/20">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold">
+            <h1 className="text-xl font-bold tracking-tight">
               {profile?.display_name ?? "User"}
             </h1>
             <p className="text-sm text-neutral-400 mt-0.5">
@@ -96,7 +104,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-semibold text-blue-400">
+            <div className="text-2xl font-semibold text-sky-400 tabular-nums">
               {profile?.exp?.toFixed(1) ?? 0}
             </div>
             <div className="text-xs text-neutral-500">
@@ -106,14 +114,14 @@ export default function Dashboard() {
         </div>
         <div className="mt-3 h-2 rounded-full bg-neutral-800 overflow-hidden">
           <div
-            className="h-full rounded-full bg-blue-500 transition-all"
+            className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-400 transition-all"
             style={{ width: `${expPct}%` }}
           />
         </div>
       </section>
 
       {/* Today points */}
-      <section className="rounded-xl bg-neutral-900 border border-neutral-800 p-4">
+      <section className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4 shadow-lg shadow-black/10">
         <div className="flex items-center justify-between gap-3 mb-2">
           <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">
             Today
@@ -125,7 +133,7 @@ export default function Dashboard() {
         <div className="flex items-end justify-between gap-3">
           <div>
             <div
-              className={`text-2xl font-bold ${
+              className={`text-2xl font-bold tabular-nums ${
                 metCommit ? "text-emerald-400" : "text-amber-400"
               }`}
             >
@@ -142,14 +150,16 @@ export default function Dashboard() {
               ) : null}
             </div>
           </div>
-          <div className="text-sm text-neutral-400">
+          <div className="text-sm text-neutral-400 tabular-nums">
             {todayPct.toFixed(0)}%
           </div>
         </div>
         <div className="mt-3 h-2.5 rounded-full bg-neutral-800 overflow-hidden">
           <div
             className={`h-full rounded-full transition-all ${
-              metCommit ? "bg-emerald-500" : "bg-amber-500"
+              metCommit
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                : "bg-gradient-to-r from-amber-500 to-amber-400"
             }`}
             style={{ width: `${todayPct}%` }}
           />
@@ -170,14 +180,14 @@ export default function Dashboard() {
       <section className="grid grid-cols-2 gap-3">
         <Link
           to="/projects"
-          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-sm font-medium transition-colors"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-sm font-medium transition-all shadow-lg shadow-blue-900/30 active:scale-[0.98]"
         >
           <span className="text-lg leading-none">+</span>
           New Project
         </Link>
         <Link
           to="/tasks"
-          className="flex items-center justify-center gap-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-4 py-3 text-sm font-medium transition-colors"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-4 py-3 text-sm font-medium transition-all active:scale-[0.98]"
         >
           <span className="text-lg leading-none">+</span>
           New Task
@@ -193,13 +203,13 @@ export default function Dashboard() {
 
       {/* Recent projects */}
       <section>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">
             Projects
           </h2>
           <Link
             to="/projects"
-            className="text-xs text-blue-400 hover:text-blue-300"
+            className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
           >
             View all
           </Link>
@@ -211,12 +221,24 @@ export default function Dashboard() {
             {activeProjects.slice(0, 5).map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-neutral-900 border border-neutral-800 px-3 py-2"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/tasks?project=${p.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/tasks?project=${p.id}`);
+                  }
+                }}
+                className={`flex items-center justify-between gap-2 rounded-xl bg-neutral-900/70 border border-neutral-800 border-l-[3px] ${ACCENT[p.status]} px-3 py-2.5 cursor-pointer
+                  hover:bg-neutral-800/60 hover:border-neutral-700 hover:shadow-md transition-all active:scale-[0.99]`}
               >
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{p.name}</div>
-                  <div className="text-xs text-neutral-500">
-                    {p.current_points?.toFixed(1)} pts
+                  <div className="font-medium truncate text-[14px]">{p.name}</div>
+                  <div className="text-xs text-neutral-500 mt-0.5">
+                    <span className="text-amber-400/90 font-medium">
+                      {p.current_points?.toFixed(1)} pts
+                    </span>
                     {p.due_date ? ` · due ${p.due_date}` : ""}
                   </div>
                 </div>
@@ -229,13 +251,13 @@ export default function Dashboard() {
 
       {/* Recent tasks */}
       <section>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">
             Tasks
           </h2>
           <Link
             to="/tasks"
-            className="text-xs text-blue-400 hover:text-blue-300"
+            className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
           >
             View all
           </Link>
@@ -247,20 +269,35 @@ export default function Dashboard() {
             {activeTasks.slice(0, 8).map((t) => (
               <li
                 key={t.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-neutral-900 border border-neutral-800 px-3 py-2"
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  navigate(`/tasks?project=${t.project}&parent=${t.id}`)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/tasks?project=${t.project}&parent=${t.id}`);
+                  }
+                }}
+                className={`flex items-center justify-between gap-2 rounded-xl bg-neutral-900/70 border border-neutral-800 border-l-[3px] ${ACCENT[t.status]} px-3 py-2.5 cursor-pointer
+                  hover:bg-neutral-800/60 hover:border-neutral-700 hover:shadow-md transition-all active:scale-[0.99]`}
                 style={{
                   marginLeft: Math.max(0, (t.task_level || 1) - 1) * 12,
                 }}
               >
                 <div className="min-w-0">
-                  <div className="font-medium truncate">
+                  <div className="font-medium truncate text-[14px]">
                     {(t.task_level || 1) > 1 && (
-                      <span className="text-neutral-600 mr-1">└</span>
+                      <span className="text-neutral-600 mr-1 text-xs">└</span>
                     )}
                     {t.name}
                   </div>
-                  <div className="text-xs text-neutral-500">
-                    L{t.task_level} · {t.current_points?.toFixed(1)} pts
+                  <div className="text-xs text-neutral-500 mt-0.5">
+                    L{t.task_level} ·{" "}
+                    <span className="text-amber-400/90 font-medium">
+                      {t.current_points?.toFixed(1)} pts
+                    </span>
                     {t.due_date ? ` · due ${t.due_date}` : ""}
                   </div>
                 </div>
@@ -284,8 +321,8 @@ function StatCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl bg-neutral-900 border border-neutral-800 p-3 text-center">
-      <div className="text-2xl font-bold">{value}</div>
+    <div className="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-3.5 text-center hover:border-neutral-700 transition-colors">
+      <div className="text-2xl font-bold tabular-nums tracking-tight">{value}</div>
       <div className="text-xs text-neutral-400 mt-0.5">{label}</div>
       <div className="text-[10px] text-neutral-600">{sub}</div>
     </div>

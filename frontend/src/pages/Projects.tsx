@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   getProjects,
@@ -20,7 +21,22 @@ const STATUS_OPTIONS: Status[] = [
   "canceled",
 ];
 
+const ACCENT: Record<Status, string> = {
+  pending: "border-l-neutral-500",
+  in_progress: "border-l-sky-400",
+  completed: "border-l-emerald-400",
+  canceled: "border-l-rose-400",
+};
+
+const ACCENT_BG: Record<Status, string> = {
+  pending: "hover:bg-neutral-800/50",
+  in_progress: "hover:bg-sky-950/30",
+  completed: "hover:bg-emerald-950/20",
+  canceled: "hover:bg-rose-950/20",
+};
+
 export default function Projects() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [priorities, setPriorities] = useState<Level[]>([]);
   const [difficulties, setDifficulties] = useState<Level[]>([]);
@@ -50,7 +66,6 @@ export default function Projects() {
       setProjects(projs);
       setPriorities(pris);
       setDifficulties(diffs);
-      // default form levels
       setForm((f) => ({
         ...f,
         priority: f.priority || pris.find((p) => p.coefficient === 1)?.id || pris[0]?.id || 0,
@@ -127,23 +142,27 @@ export default function Projects() {
     return list.find((l) => l.id === id)?.name ?? `#${id}`;
   }
 
+  function openProjectTasks(id: number) {
+    navigate(`/tasks?project=${id}`);
+  }
+
   if (loading) return <Loading />;
 
   return (
     <div className="p-4 pb-24 max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Projects</h1>
+        <h1 className="text-xl font-bold tracking-tight">Projects</h1>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium"
+          className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium shadow-lg shadow-blue-900/30 transition-all active:scale-[0.98]"
         >
           {showForm ? "Cancel" : "+ New"}
         </button>
       </div>
 
       {error && (
-        <div className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
+        <div className="text-sm text-red-400 bg-red-950/40 border border-red-900/60 rounded-xl px-3 py-2">
           {error}
         </div>
       )}
@@ -151,17 +170,17 @@ export default function Projects() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl bg-neutral-900 border border-neutral-800 p-4 space-y-3"
+          className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4 space-y-3 shadow-xl shadow-black/20"
         >
           <input
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 transition-colors"
             placeholder="Project name *"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
           <textarea
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-blue-500 min-h-[72px]"
+            className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 min-h-[72px] transition-colors"
             placeholder="Description"
             value={form.description || ""}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -170,7 +189,7 @@ export default function Projects() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Priority
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.priority}
                 onChange={(e) =>
                   setForm({ ...form, priority: Number(e.target.value) })
@@ -186,7 +205,7 @@ export default function Projects() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Difficulty
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.difficulty}
                 onChange={(e) =>
                   setForm({ ...form, difficulty: Number(e.target.value) })
@@ -204,7 +223,7 @@ export default function Projects() {
             <label className="text-xs text-neutral-400 space-y-1 block">
               Status
               <select
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.status || "pending"}
                 onChange={(e) =>
                   setForm({ ...form, status: e.target.value as Status })
@@ -221,7 +240,7 @@ export default function Projects() {
               Due date
               <input
                 type="date"
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.due_date || ""}
                 onChange={(e) =>
                   setForm({ ...form, due_date: e.target.value || null })
@@ -232,7 +251,7 @@ export default function Projects() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium"
+            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium shadow-lg shadow-blue-900/20 transition-all"
           >
             {submitting ? "Creating..." : "Create project"}
           </button>
@@ -249,35 +268,52 @@ export default function Projects() {
           {projects.map((p) => (
             <li
               key={p.id}
-              className="rounded-xl bg-neutral-900 border border-neutral-800 p-4"
+              role="button"
+              tabIndex={0}
+              onClick={() => openProjectTasks(p.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openProjectTasks(p.id);
+                }
+              }}
+              className={`group relative rounded-2xl border border-neutral-800/80 border-l-[3px] ${ACCENT[p.status]} bg-neutral-900/70 p-4 cursor-pointer
+                ${ACCENT_BG[p.status]} hover:border-neutral-700 hover:shadow-lg hover:shadow-black/30
+                active:scale-[0.995] transition-all duration-200`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold truncate">{p.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-[15px] tracking-tight truncate group-hover:text-white transition-colors">
+                    {p.name}
+                  </h3>
                   {p.description && (
-                    <p className="text-sm text-neutral-400 mt-1 line-clamp-2">
+                    <p className="text-sm text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
                       {p.description}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-neutral-500">
-                    <span>{levelName(priorities, p.priority)}</span>
-                    <span>·</span>
-                    <span>{levelName(difficulties, p.difficulty)}</span>
-                    <span>·</span>
-                    <span>{p.current_points?.toFixed(1)} pts</span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2.5 text-[11px] text-neutral-500">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
+                      {levelName(priorities, p.priority)}
+                    </span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
+                      {levelName(difficulties, p.difficulty)}
+                    </span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400/90 font-medium">
+                      {p.current_points?.toFixed(1)} pts
+                    </span>
                     {p.due_date && (
-                      <>
-                        <span>·</span>
-                        <span>due {p.due_date}</span>
-                      </>
+                      <span className="text-neutral-500">due {p.due_date}</span>
                     )}
                   </div>
                 </div>
                 <StatusBadge status={p.status} />
               </div>
-              <div className="flex flex-wrap items-center gap-2 mt-3">
+              <div
+                className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-neutral-800/60"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <select
-                  className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-1 text-xs text-white"
+                  className="rounded-lg bg-neutral-950/80 border border-neutral-700/80 px-2 py-1 text-xs text-white focus:border-blue-500 outline-none"
                   value={p.status}
                   onChange={(e) =>
                     handleStatusChange(p.id, e.target.value as Status)
@@ -291,8 +327,15 @@ export default function Projects() {
                 </select>
                 <button
                   type="button"
+                  onClick={() => openProjectTasks(p.id)}
+                  className="text-xs text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg hover:bg-sky-500/10 transition-colors"
+                >
+                  View tasks →
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDelete(p.id)}
-                  className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
+                  className="text-xs text-rose-400/80 hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors ml-auto"
                 >
                   Delete
                 </button>
