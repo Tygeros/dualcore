@@ -7,6 +7,9 @@ from users.models import User
 class Project(BaseMission):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
 
+    class Meta:
+        ordering = ["-created_at"]
+
     def __str__(self):
         return self.name
 

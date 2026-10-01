@@ -10,6 +10,9 @@ class Task(BaseMission):
     parent_task = models.ForeignKey("self", on_delete=models.CASCADE, null=True, related_name="child_tasks")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
 
+    class Meta:
+        ordering = ["-created_at"]
+
     def __str__(self):
         return self.name
 
