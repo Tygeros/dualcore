@@ -3,12 +3,18 @@ from django.db import models
 from base.models import BaseMission
 from users.models import User
 from projects.models import Project
+from categories.models import Category
 
 
 class Task(BaseMission):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tasks")
-    parent_task = models.ForeignKey("self", on_delete=models.CASCADE, null=True, related_name="child_tasks")
+    parent_task = models.ForeignKey(
+        "self", on_delete=models.CASCADE, null=True, related_name="child_tasks"
+    )
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
+    categories = models.ManyToManyField(
+        Category, blank=True, related_name="tasks"
+    )
 
     class Meta:
         ordering = ["-created_at"]

@@ -10,13 +10,16 @@ class TaskList(generics.ListCreateAPIView):
     serializer_class = TaskSerializer
 
     def get_queryset(self):
-        qs = Task.objects.all()
+        qs = Task.objects.prefetch_related("categories").all()
         project_id = self.request.query_params.get("project")
         status = self.request.query_params.get("status")
+        category_id = self.request.query_params.get("category")
         if project_id:
             qs = qs.filter(project_id=project_id)
         if status:
             qs = qs.filter(status=status)
+        if category_id:
+            qs = qs.filter(categories__id=category_id).distinct()
         return qs
 
     def perform_create(self, serializer):
@@ -26,5 +29,5 @@ class TaskList(generics.ListCreateAPIView):
 
 
 class TaskDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Task.objects.all()
+    queryset = Task.objects.prefetch_related("categories").all()
     serializer_class = TaskSerializer

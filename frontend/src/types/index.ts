@@ -7,6 +7,19 @@ export interface Level {
   note: string;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  note: string;
+  color: string;
+}
+
+export interface CategoryCreatePayload {
+  name: string;
+  note?: string;
+  color?: string;
+}
+
 export interface Profile {
   id: number;
   user: number;
@@ -26,7 +39,6 @@ export interface TodayPoints {
   tasks_count?: number;
 }
 
-
 export interface Project {
   id: number;
   owner: number;
@@ -37,6 +49,7 @@ export interface Project {
   status: Status;
   due_date: string | null;
   terminated_date: string | null;
+  categories: number[];
   current_points: number;
   final_points: number | null;
   created_at: string;
@@ -56,6 +69,7 @@ export interface Task {
   status: Status;
   due_date: string | null;
   terminated_date: string | null;
+  categories: number[];
   current_points: number;
   final_points: number | null;
   created_at: string;
@@ -69,6 +83,7 @@ export interface ProjectCreatePayload {
   difficulty: number;
   status?: Status;
   due_date?: string | null;
+  categories?: number[];
 }
 
 export interface TaskCreatePayload {
@@ -80,4 +95,5 @@ export interface TaskCreatePayload {
   difficulty: number;
   status?: Status;
   due_date?: string | null;
+  categories?: number[];
 }

@@ -3,3 +3,4 @@ export * from "./profile";
 export * from "./projects";
 export * from "./tasks";
 export * from "./levels";
+export * from "./categories";

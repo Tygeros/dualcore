@@ -9,6 +9,7 @@ import {
   getProjects,
   getPriorityLevels,
   getDifficultyLevels,
+  getCategories,
 } from "../services";
 import type {
   Task,
@@ -16,10 +17,14 @@ import type {
   Level,
   Status,
   TaskCreatePayload,
+  Category,
 } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
+import CategoryPicker from "../components/CategoryPicker";
+import CategoryBadges from "../components/CategoryBadges";
+import CategoryManager from "../components/CategoryManager";
 import {
   groupTasksByProject,
   flattenTree,
@@ -55,11 +60,13 @@ export default function Tasks() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [priorities, setPriorities] = useState<Level[]>([]);
   const [difficulties, setDifficulties] = useState<Level[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [filterProject, setFilterProject] = useState<number | "">(() => {
     const p = searchParams.get("project");
     return p ? Number(p) : "";
   });
   const [filterStatus, setFilterStatus] = useState<Status | "">("");
+  const [filterCategory, setFilterCategory] = useState<number | "">("");
   const [filterParent, setFilterParent] = useState<number | null>(() => {
     const p = searchParams.get("parent");
     return p ? Number(p) : null;
@@ -78,9 +85,9 @@ export default function Tasks() {
     difficulty: 0,
     status: "pending",
     due_date: null,
+    categories: [],
   });
 
-  // Sync URL → state when user lands with query params
   useEffect(() => {
     const p = searchParams.get("project");
     const parent = searchParams.get("parent");
@@ -89,24 +96,22 @@ export default function Tasks() {
   }, [searchParams]);
 
   const loadMeta = useCallback(async () => {
-    const [projs, pris, diffs] = await Promise.all([
+    const [projs, pris, diffs, cats] = await Promise.all([
       getProjects(),
       getPriorityLevels(),
       getDifficultyLevels(),
+      getCategories(),
     ]);
     setProjects(projs);
     setPriorities(pris);
     setDifficulties(diffs);
+    setCategories(cats);
     const activeProjs = projs.filter(
       (p) => p.status === "pending" || p.status === "in_progress"
     );
     setForm((f) => ({
       ...f,
-      project:
-        f.project ||
-        activeProjs[0]?.id ||
-        projs[0]?.id ||
-        0,
+      project: f.project || activeProjs[0]?.id || projs[0]?.id || 0,
       priority:
         f.priority ||
         pris.find((p) => p.coefficient === 1)?.id ||
@@ -124,9 +129,14 @@ export default function Tasks() {
     setLoading(true);
     setError(null);
     try {
-      const params: { project?: number; status?: Status } = {};
+      const params: {
+        project?: number;
+        status?: Status;
+        category?: number;
+      } = {};
       if (filterProject !== "") params.project = filterProject;
       if (filterStatus !== "") params.status = filterStatus;
+      if (filterCategory !== "") params.category = filterCategory;
       const list = await getTasks(params);
       setTasks(list);
     } catch (e) {
@@ -134,7 +144,7 @@ export default function Tasks() {
     } finally {
       setLoading(false);
     }
-  }, [filterProject, filterStatus]);
+  }, [filterProject, filterStatus, filterCategory]);
 
   useEffect(() => {
     loadMeta().catch((e) =>
@@ -146,11 +156,15 @@ export default function Tasks() {
     loadTasks();
   }, [loadTasks]);
 
+  async function reloadCategories() {
+    const cats = await getCategories();
+    setCategories(cats);
+  }
+
   const groups = useMemo(() => {
     const allGroups = groupTasksByProject(tasks, projects);
     if (filterParent == null) return allGroups;
 
-    // Show only the clicked task as root + its children
     return allGroups
       .map((g) => {
         const node = findSubtree(g.roots, filterParent);
@@ -193,6 +207,7 @@ export default function Tasks() {
         description: form.description?.trim() || "",
         parent_task: form.parent_task || null,
         due_date: form.due_date || null,
+        categories: form.categories || [],
       });
       setShowForm(false);
       setForm((f) => ({
@@ -202,6 +217,7 @@ export default function Tasks() {
         parent_task: null,
         status: "pending",
         due_date: null,
+        categories: [],
       }));
       await loadTasks();
     } catch (err) {
@@ -244,13 +260,11 @@ export default function Tasks() {
   const isActiveStatus = (s: Status) =>
     s === "pending" || s === "in_progress";
 
-  /** Projects selectable in create form: only pending / in_progress. */
   const activeProjects = useMemo(
     () => projects.filter((p) => isActiveStatus(p.status)),
     [projects]
   );
 
-  /** Parent options: active tasks in selected project (tree order). */
   const parentOptions = useMemo(() => {
     const inProject = tasks.filter(
       (t) => t.project === form.project && isActiveStatus(t.status)
@@ -271,7 +285,8 @@ export default function Tasks() {
         </button>
       </div>
 
-      {/* Breadcrumb when drilling into a parent task */}
+      <CategoryManager categories={categories} onChange={reloadCategories} />
+
       {filterParent != null && (
         <div className="flex items-center gap-2 text-sm flex-wrap">
           <button
@@ -321,15 +336,22 @@ export default function Tasks() {
             </option>
           ))}
         </select>
-        {filterParent != null && (
-          <button
-            type="button"
-            onClick={() => updateFilters(filterProject, null)}
-            className="rounded-xl border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
-          >
-            Clear parent filter
-          </button>
-        )}
+        <select
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+          value={filterCategory}
+          onChange={(e) =>
+            setFilterCategory(
+              e.target.value === "" ? "" : Number(e.target.value)
+            )
+          }
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -356,9 +378,14 @@ export default function Tasks() {
             value={form.description || ""}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
+          <CategoryPicker
+            categories={categories}
+            selected={form.categories || []}
+            onChange={(ids) => setForm({ ...form, categories: ids })}
+          />
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs text-neutral-400 space-y-1 block">
-              Project *
+              Project
               <select
                 className="w-full rounded-xl bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-white"
                 value={form.project}
@@ -369,19 +396,15 @@ export default function Tasks() {
                     parent_task: null,
                   })
                 }
-                required
               >
-                {activeProjects.length === 0 ? (
-                  <option value={0} disabled>
-                    Không có project đang mở
-                  </option>
-                ) : (
-                  activeProjects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))
+                {activeProjects.length === 0 && (
+                  <option value={0}>— không có project active —</option>
                 )}
+                {activeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="text-xs text-neutral-400 space-y-1 block">
@@ -398,7 +421,7 @@ export default function Tasks() {
                   })
                 }
               >
-                <option value="">None (root)</option>
+                <option value="">— root —</option>
                 {parentOptions.map(({ task: t, depth }) => (
                   <option key={t.id} value={t.id}>
                     {"—".repeat(depth)} {t.name}
@@ -499,8 +522,6 @@ export default function Tasks() {
         <div className="space-y-6">
           {groups.map((group) => {
             const rows = flattenTree(group.roots);
-            // When filtering by parent, the root is the parent itself —
-            // show children with relative depth, or whole subtree
             return (
               <section key={group.projectId}>
                 {filterParent == null && (
@@ -519,11 +540,10 @@ export default function Tasks() {
                 )}
                 <ul className="space-y-2.5">
                   {rows.map(({ task: t, depth }) => {
-                    // When parent filter is on, skip rendering the parent as a nested card
-                    // if we only want children — but user asked for "task con",
-                    // showing parent as context header is fine; still show full subtree.
                     const isFocusRoot =
-                      filterParent != null && t.id === filterParent && depth === 0;
+                      filterParent != null &&
+                      t.id === filterParent &&
+                      depth === 0;
                     return (
                       <li
                         key={t.id}
@@ -544,33 +564,20 @@ export default function Tasks() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              {depth > 0 && (
-                                <span
-                                  className="text-neutral-600 shrink-0 select-none text-xs"
-                                  aria-hidden
-                                >
-                                  └
-                                </span>
-                              )}
-                              <h3 className="font-semibold text-[14px] tracking-tight truncate group-hover:text-white transition-colors">
-                                {t.name}
-                              </h3>
-                              {isFocusRoot && (
-                                <span className="text-[10px] uppercase tracking-wider text-sky-400/80 bg-sky-500/10 px-1.5 py-0.5 rounded">
-                                  focus
-                                </span>
-                              )}
-                            </div>
+                            <h3 className="font-semibold text-[15px] tracking-tight truncate group-hover:text-white transition-colors">
+                              {t.name}
+                            </h3>
                             {t.description && (
                               <p className="text-sm text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
                                 {t.description}
                               </p>
                             )}
-                            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[11px]">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
-                                L{t.task_level}
-                              </span>
+                            <CategoryBadges
+                              categoryIds={t.categories || []}
+                              categories={categories}
+                              className="mt-1.5"
+                            />
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2 text-[11px] text-neutral-500">
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400">
                                 {levelName(priorities, t.priority)}
                               </span>
@@ -590,14 +597,17 @@ export default function Tasks() {
                           <StatusBadge status={t.status} />
                         </div>
                         <div
-                          className="flex flex-wrap items-center gap-2 mt-2.5 pt-2.5 border-t border-neutral-800/60"
+                          className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-neutral-800/60"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <select
                             className="rounded-lg bg-neutral-950/80 border border-neutral-700/80 px-2 py-1 text-xs text-white focus:border-blue-500 outline-none"
                             value={t.status}
                             onChange={(e) =>
-                              handleStatusChange(t.id, e.target.value as Status)
+                              handleStatusChange(
+                                t.id,
+                                e.target.value as Status
+                              )
                             }
                           >
                             {STATUS_OPTIONS.map((s) => (

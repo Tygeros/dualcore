@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "users",
     "projects",
     "tasks",
+    "categories",
 
     "rest_framework",
     "corsheaders",

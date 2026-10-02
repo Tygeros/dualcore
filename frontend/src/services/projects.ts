@@ -1,8 +1,15 @@
 import { api } from "./api";
 import type { Project, ProjectCreatePayload, Status } from "../types";
 
-export async function getProjects(): Promise<Project[]> {
-  return api.get<Project[]>("/projects/");
+export async function getProjects(params?: {
+  category?: number;
+  status?: Status;
+}): Promise<Project[]> {
+  const search = new URLSearchParams();
+  if (params?.category != null) search.set("category", String(params.category));
+  if (params?.status) search.set("status", params.status);
+  const qs = search.toString();
+  return api.get<Project[]>(`/projects/${qs ? `?${qs}` : ""}`);
 }
 
 export async function getProject(id: number): Promise<Project> {
@@ -17,7 +24,9 @@ export async function createProject(
 
 export async function updateProject(
   id: number,
-  data: Partial<ProjectCreatePayload & { status: Status; terminated_date: string | null }>
+  data: Partial<
+    ProjectCreatePayload & { status: Status; terminated_date: string | null }
+  >
 ): Promise<Project> {
   return api.patch<Project>(`/projects/${id}/`, data);
 }

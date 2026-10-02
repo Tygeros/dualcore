@@ -4,10 +4,12 @@ import type { Task, TaskCreatePayload, Status } from "../types";
 export async function getTasks(params?: {
   project?: number;
   status?: Status;
+  category?: number;
 }): Promise<Task[]> {
   const search = new URLSearchParams();
   if (params?.project != null) search.set("project", String(params.project));
   if (params?.status) search.set("status", params.status);
+  if (params?.category != null) search.set("category", String(params.category));
   const qs = search.toString();
   return api.get<Task[]>(`/tasks/${qs ? `?${qs}` : ""}`);
 }

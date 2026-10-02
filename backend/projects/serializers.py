@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from categories.models import Category
 from .models import Project
 
 from base.services import up_level
@@ -8,6 +9,9 @@ from base.services import up_level
 class ProjectSerializer(serializers.ModelSerializer):
     current_points = serializers.SerializerMethodField()
     final_points = serializers.SerializerMethodField()
+    categories = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Category.objects.all(), required=False
+    )
 
     class Meta:
         model = Project
@@ -21,19 +25,26 @@ class ProjectSerializer(serializers.ModelSerializer):
             "status",
             "due_date",
             "terminated_date",
+            "categories",
             "current_points",
             "final_points",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["owner"]
- 
 
     def update(self, instance, validated_data):
         old_status = instance.status
+        categories = validated_data.pop("categories", None)
         project = super().update(instance, validated_data)
 
-        if old_status in ["pending", "in_progress"] and project.status in ["completed", "canceled"]:
+        if categories is not None:
+            project.categories.set(categories)
+
+        if old_status in ["pending", "in_progress"] and project.status in [
+            "completed",
+            "canceled",
+        ]:
             owner = project.owner
             profile = owner.profile
             new_level, new_exp = up_level(profile, project.final_points())
@@ -47,6 +58,13 @@ class ProjectSerializer(serializers.ModelSerializer):
                     task.status = "completed"
                     task.save()
 
+        return project
+
+    def create(self, validated_data):
+        categories = validated_data.pop("categories", [])
+        project = super().create(validated_data)
+        if categories:
+            project.categories.set(categories)
         return project
 
     def get_current_points(self, obj):
