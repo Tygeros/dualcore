@@ -22,10 +22,16 @@ const PRESET_COLORS = [
 interface Props {
   categories: Category[];
   onChange: () => Promise<void> | void;
+  /** Mở sẵn panel (dùng trên Settings) */
+  defaultOpen?: boolean;
 }
 
-export default function CategoryManager({ categories, onChange }: Props) {
-  const [open, setOpen] = useState(false);
+export default function CategoryManager({
+  categories,
+  onChange,
+  defaultOpen = false,
+}: Props) {
+  const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState("");
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [note, setNote] = useState("");

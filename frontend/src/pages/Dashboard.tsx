@@ -6,17 +6,34 @@ import {
   getProjects,
   getTasks,
   getTodayPoints,
+  getCategories,
+  getPriorityLevels,
+  getDifficultyLevels,
 } from "../services";
-import type { Profile, Project, Task, TodayPoints } from "../types";
+import type {
+  Profile,
+  Project,
+  Task,
+  TodayPoints,
+  Category,
+  Level,
+} from "../types";
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 import {
   LineChart,
   BarChart,
+  PieChart,
+  Heatmap,
+  HBarChart,
   COLORS,
 } from "../components/charts/SimpleCharts";
 import {
   buildDashboardSeries,
+  buildHeatmapDays,
+  countByCategory,
+  countByStatus,
+  countByLevel,
   type RangeKey,
 } from "../utils/chartData";
 
@@ -40,6 +57,9 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [today, setToday] = useState<TodayPoints | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [priorities, setPriorities] = useState<Level[]>([]);
+  const [difficulties, setDifficulties] = useState<Level[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeKey>("30d");
@@ -51,17 +71,23 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       try {
-        const [p, projs, tsks, tp] = await Promise.all([
+        const [p, projs, tsks, tp, cats, pris, diffs] = await Promise.all([
           getCurrentProfile(),
           getProjects(),
           getTasks(),
           getTodayPoints(),
+          getCategories(),
+          getPriorityLevels(),
+          getDifficultyLevels(),
         ]);
         if (cancelled) return;
         setProfile(p);
         setProjects(projs);
         setTasks(tsks);
         setToday(tp);
+        setCategories(cats);
+        setPriorities(pris);
+        setDifficulties(diffs);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load data");
@@ -90,7 +116,11 @@ export default function Dashboard() {
   );
 
   const pointsSeries = useMemo(
-    () => series.map((b) => ({ label: b.label, value: Math.round(b.points * 10) / 10 })),
+    () =>
+      series.map((b) => ({
+        label: b.label,
+        value: Math.round(b.points * 10) / 10,
+      })),
     [series]
   );
 
@@ -117,6 +147,88 @@ export default function Dashboard() {
     () => series.reduce((s, b) => s + b.points, 0),
     [series]
   );
+
+  const heatDays = useMemo(
+    () => buildHeatmapDays(projects, tasks, 100),
+    [projects, tasks]
+  );
+
+  const heatCells = useMemo(
+    () =>
+      heatDays.map((d) => ({
+        key: d.key,
+        date: d.date,
+        value: Math.round(d.points * 10) / 10,
+        label:
+          d.created || d.completed
+            ? `${d.created} created · ${d.completed} done`
+            : undefined,
+      })),
+    [heatDays]
+  );
+
+  const projectByCategory = useMemo(
+    () => countByCategory(projects, categories),
+    [projects, categories]
+  );
+  const taskByCategory = useMemo(
+    () => countByCategory(tasks, categories),
+    [tasks, categories]
+  );
+  const projectByStatus = useMemo(() => countByStatus(projects), [projects]);
+  const taskByStatus = useMemo(() => countByStatus(tasks), [tasks]);
+
+  const priorityBars = useMemo(() => {
+    const pCounts = countByLevel(projects, priorities, "priority");
+    const tCounts = countByLevel(tasks, priorities, "priority");
+    const ids = new Set([
+      ...pCounts.map((s) => s.id),
+      ...tCounts.map((s) => s.id),
+    ]);
+    return priorities
+      .filter((l) => ids.has(l.id))
+      .map((l) => ({
+        label: l.name,
+        values: [
+          {
+            name: "Projects",
+            value: pCounts.find((s) => s.id === l.id)?.value ?? 0,
+            color: COLORS.sky,
+          },
+          {
+            name: "Tasks",
+            value: tCounts.find((s) => s.id === l.id)?.value ?? 0,
+            color: COLORS.violet,
+          },
+        ],
+      }));
+  }, [projects, tasks, priorities]);
+
+  const difficultyBars = useMemo(() => {
+    const pCounts = countByLevel(projects, difficulties, "difficulty");
+    const tCounts = countByLevel(tasks, difficulties, "difficulty");
+    const ids = new Set([
+      ...pCounts.map((s) => s.id),
+      ...tCounts.map((s) => s.id),
+    ]);
+    return difficulties
+      .filter((l) => ids.has(l.id))
+      .map((l) => ({
+        label: l.name,
+        values: [
+          {
+            name: "Projects",
+            value: pCounts.find((s) => s.id === l.id)?.value ?? 0,
+            color: COLORS.amber,
+          },
+          {
+            name: "Tasks",
+            value: tCounts.find((s) => s.id === l.id)?.value ?? 0,
+            color: COLORS.emerald,
+          },
+        ],
+      }));
+  }, [projects, tasks, difficulties]);
 
   if (loading) return <Loading />;
   if (error) {
@@ -234,6 +346,21 @@ export default function Dashboard() {
         )}
       </section>
 
+      {/* Activity heatmap — last 100 days */}
+      <section className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">
+            Activity
+          </h2>
+          <span className="text-[11px] text-neutral-500">100 days</span>
+        </div>
+        <p className="text-[11px] text-neutral-500 mb-3">
+          Daily points from completed / canceled items (green = positive, red =
+          negative)
+        </p>
+        <Heatmap days={heatCells} />
+      </section>
+
       {/* Charts */}
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -307,6 +434,75 @@ export default function Dashboard() {
               { name: "Task done", color: COLORS.amber },
             ]}
           />
+        </div>
+
+        {/* By category */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-200 mb-1">
+            By category
+          </h3>
+          <p className="text-[11px] text-neutral-500 mb-3">
+            Items tagged with each category (one item can count in multiple)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-neutral-400 text-center mb-2">
+                Projects
+              </div>
+              <PieChart data={projectByCategory} />
+            </div>
+            <div>
+              <div className="text-xs text-neutral-400 text-center mb-2">
+                Tasks
+              </div>
+              <PieChart data={taskByCategory} />
+            </div>
+          </div>
+        </div>
+
+        {/* By status */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-200 mb-1">
+            By status
+          </h3>
+          <p className="text-[11px] text-neutral-500 mb-3">
+            Current status distribution
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-neutral-400 text-center mb-2">
+                Projects
+              </div>
+              <PieChart data={projectByStatus} />
+            </div>
+            <div>
+              <div className="text-xs text-neutral-400 text-center mb-2">
+                Tasks
+              </div>
+              <PieChart data={taskByStatus} />
+            </div>
+          </div>
+        </div>
+
+        {/* Priority & difficulty */}
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-200 mb-1">
+            Priority
+          </h3>
+          <p className="text-[11px] text-neutral-500 mb-3">
+            Projects vs tasks by priority level
+          </p>
+          <HBarChart series={priorityBars} />
+        </div>
+
+        <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-200 mb-1">
+            Difficulty
+          </h3>
+          <p className="text-[11px] text-neutral-500 mb-3">
+            Projects vs tasks by difficulty level
+          </p>
+          <HBarChart series={difficultyBars} />
         </div>
       </section>
 

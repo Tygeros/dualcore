@@ -4,9 +4,9 @@ import MainLayout from "./layouts/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import Tasks from "./pages/Tasks";
+import Settings from "./pages/Settings";
 
 function App() {
-
   return (
     <BrowserRouter>
       <Routes>
@@ -14,10 +14,11 @@ function App() {
           <Route path="" element={<Dashboard />} />
           <Route path="projects" element={<Projects />} />
           <Route path="tasks" element={<Tasks />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>
-  )
+  );
 }
 
 export default App

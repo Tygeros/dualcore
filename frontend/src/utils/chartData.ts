@@ -1,4 +1,4 @@
-import type { Project, Task, Status } from "../types";
+import type { Project, Task, Status, Category, Level } from "../types";
 
 export type RangeKey = "7d" | "30d" | "90d" | "12m";
 
@@ -13,6 +13,21 @@ export interface DayBucket {
   tasksCompleted: number;
   level: number;
   exp: number;
+}
+
+export interface HeatDay {
+  key: string; // YYYY-MM-DD
+  date: Date;
+  points: number;
+  created: number;
+  completed: number;
+}
+
+export interface PieSlice {
+  id: string | number;
+  label: string;
+  value: number;
+  color: string;
 }
 
 const DONE: Status[] = ["completed", "canceled"];
@@ -284,4 +299,171 @@ export function buildDashboardSeries(
   }
 
   return buckets;
+}
+
+/** Daily activity (points) for last `days` days — used by heatmap. */
+export function buildHeatmapDays(
+  projects: Project[],
+  tasks: Task[],
+  days = 100,
+  now = new Date()
+): HeatDay[] {
+  const end = startOfDay(now);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+
+  const map = new Map<string, HeatDay>();
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const key = formatDay(cursor);
+    map.set(key, {
+      key,
+      date: new Date(cursor),
+      points: 0,
+      created: 0,
+      completed: 0,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const p of projects) {
+    const created = parseDate(p.created_at);
+    if (created && created >= start) {
+      const b = map.get(formatDay(created));
+      if (b) b.created += 1;
+    }
+    if (DONE.includes(p.status)) {
+      const d = parseDate(p.terminated_date);
+      if (d && d >= start) {
+        const b = map.get(formatDay(d));
+        if (b) {
+          b.points += p.final_points ?? 0;
+          if (p.status === "completed") b.completed += 1;
+        }
+      }
+    }
+  }
+  for (const t of tasks) {
+    const created = parseDate(t.created_at);
+    if (created && created >= start) {
+      const b = map.get(formatDay(created));
+      if (b) b.created += 1;
+    }
+    if (DONE.includes(t.status)) {
+      const d = parseDate(t.terminated_date);
+      if (d && d >= start) {
+        const b = map.get(formatDay(d));
+        if (b) {
+          b.points += t.final_points ?? 0;
+          if (t.status === "completed") b.completed += 1;
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
+}
+
+const STATUS_LABELS: Record<Status, string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  completed: "Completed",
+  canceled: "Canceled",
+};
+
+const STATUS_COLORS: Record<Status, string> = {
+  pending: "#737373",
+  in_progress: "#38bdf8",
+  completed: "#34d399",
+  canceled: "#fb7185",
+};
+
+/** Count items by category (M2M ids). Uncategorized bucket if empty. */
+export function countByCategory(
+  items: { categories: number[] }[],
+  categories: Category[]
+): PieSlice[] {
+  const counts = new Map<number, number>();
+  let uncategorized = 0;
+  for (const item of items) {
+    const ids = item.categories ?? [];
+    if (ids.length === 0) {
+      uncategorized += 1;
+      continue;
+    }
+    for (const id of ids) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  const slices: PieSlice[] = categories
+    .filter((c) => (counts.get(c.id) ?? 0) > 0)
+    .map((c) => ({
+      id: c.id,
+      label: c.name,
+      value: counts.get(c.id) ?? 0,
+      color: c.color || "#6366f1",
+    }))
+    .sort((a, b) => b.value - a.value);
+  if (uncategorized > 0) {
+    slices.push({
+      id: "none",
+      label: "Uncategorized",
+      value: uncategorized,
+      color: "#525252",
+    });
+  }
+  return slices;
+}
+
+export function countByStatus(
+  items: { status: Status }[]
+): PieSlice[] {
+  const order: Status[] = ["pending", "in_progress", "completed", "canceled"];
+  const counts = new Map<Status, number>();
+  for (const item of items) {
+    counts.set(item.status, (counts.get(item.status) ?? 0) + 1);
+  }
+  return order
+    .filter((s) => (counts.get(s) ?? 0) > 0)
+    .map((s) => ({
+      id: s,
+      label: STATUS_LABELS[s],
+      value: counts.get(s) ?? 0,
+      color: STATUS_COLORS[s],
+    }));
+}
+
+/** Count by level FK (priority or difficulty). */
+export function countByLevel(
+  items: { priority?: number; difficulty?: number }[],
+  levels: Level[],
+  field: "priority" | "difficulty"
+): PieSlice[] {
+  const counts = new Map<number, number>();
+  for (const item of items) {
+    const id = item[field];
+    if (id == null) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const palette = [
+    "#38bdf8",
+    "#a78bfa",
+    "#fbbf24",
+    "#34d399",
+    "#fb7185",
+    "#f97316",
+    "#14b8a6",
+    "#64748b",
+  ];
+  return levels
+    .map((l, i) => ({
+      id: l.id,
+      label: l.name,
+      value: counts.get(l.id) ?? 0,
+      color: palette[i % palette.length],
+    }))
+    .filter((s) => s.value > 0)
+    .sort((a, b) => b.value - a.value);
 }
