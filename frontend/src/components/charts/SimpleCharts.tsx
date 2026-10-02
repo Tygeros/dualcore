@@ -456,7 +456,6 @@ export function Heatmap({
   const monthLabels: { x: number; text: string }[] = [];
   let lastMonth = -1;
   for (let w = 0; w < weekCount; w++) {
-    const cell0 = padded[w * 7];
     // find first non-null in week
     let sample: HeatCell | null = null;
     for (let r = 0; r < 7; r++) {
