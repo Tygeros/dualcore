@@ -18,6 +18,7 @@ import type {
   Category,
 } from "../types";
 import StatusBadge from "../components/StatusBadge";
+import DueBadge from "../components/DueBadge";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
 import CategoryPicker from "../components/CategoryPicker";
@@ -361,9 +362,7 @@ export default function Projects() {
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400/90 font-medium">
                       {p.current_points?.toFixed(1)} pts
                     </span>
-                    {p.due_date && (
-                      <span className="text-neutral-500">due {p.due_date}</span>
-                    )}
+                    <DueBadge dueDate={p.due_date} status={p.status} />
                   </div>
                 </div>
                 <StatusBadge status={p.status} />

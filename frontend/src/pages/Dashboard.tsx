@@ -19,6 +19,7 @@ import type {
   Level,
 } from "../types";
 import StatusBadge from "../components/StatusBadge";
+import DueBadge from "../components/DueBadge";
 import Loading from "../components/Loading";
 import {
   LineChart,
@@ -576,11 +577,11 @@ export default function Dashboard() {
               >
                 <div className="min-w-0">
                   <div className="font-medium truncate text-[14px]">{p.name}</div>
-                  <div className="text-xs text-neutral-500 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-neutral-500 mt-0.5">
                     <span className="text-amber-400/90 font-medium">
                       {p.current_points?.toFixed(1)} pts
                     </span>
-                    {p.due_date ? ` · due ${p.due_date}` : ""}
+                    <DueBadge dueDate={p.due_date} status={p.status} />
                   </div>
                 </div>
                 <StatusBadge status={p.status} />
@@ -634,12 +635,12 @@ export default function Dashboard() {
                     )}
                     {t.name}
                   </div>
-                  <div className="text-xs text-neutral-500 mt-0.5">
-                    L{t.task_level} ·{" "}
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-neutral-500 mt-0.5">
+                    <span>L{t.task_level}</span>
                     <span className="text-amber-400/90 font-medium">
                       {t.current_points?.toFixed(1)} pts
                     </span>
-                    {t.due_date ? ` · due ${t.due_date}` : ""}
+                    <DueBadge dueDate={t.due_date} status={t.status} />
                   </div>
                 </div>
                 <StatusBadge status={t.status} />
