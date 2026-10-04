@@ -23,6 +23,7 @@ import EmptyState from "../components/EmptyState";
 import CategoryPicker from "../components/CategoryPicker";
 import CategoryBadges from "../components/CategoryBadges";
 import CategoryManager from "../components/CategoryManager";
+import { localDateString } from "../utils/date";
 
 const STATUS_OPTIONS: Status[] = [
   "pending",
@@ -146,7 +147,10 @@ export default function Projects() {
       const payload: Partial<{ status: Status; terminated_date: string | null }> =
         { status };
       if (status === "completed" || status === "canceled") {
-        payload.terminated_date = new Date().toISOString().slice(0, 10);
+        // Local calendar date (not UTC) so it matches backend timezone.localdate()
+        payload.terminated_date = localDateString();
+      } else {
+        payload.terminated_date = null;
       }
       await updateProject(id, payload);
       await load();

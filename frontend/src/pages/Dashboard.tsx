@@ -67,8 +67,8 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      setLoading(true);
+    async function load(showLoading = true) {
+      if (showLoading) setLoading(true);
       setError(null);
       try {
         const [p, projs, tsks, tp, cats, pris, diffs] = await Promise.all([
@@ -93,13 +93,24 @@ export default function Dashboard() {
           setError(e instanceof Error ? e.message : "Failed to load data");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoading) setLoading(false);
       }
     }
 
-    load();
+    load(true);
+
+    // Refetch when tab becomes visible again (e.g. after completing a task
+    // on another page) so Today points stay in sync.
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        load(false);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

@@ -27,26 +27,33 @@ class Command(BaseCommand):
         today_points = 0.0
 
         for project in projects:
-            today_points += project.final_points()
+            pts = project.final_points()
+            if pts is not None:
+                today_points += pts
 
         for task in tasks:
-            today_points += task.final_points()
+            pts = task.final_points()
+            if pts is not None:
+                today_points += pts
 
         level_coefficient = 1
         if profile.level > 0:
             level_coefficient = profile.level
         bonus_points = (today_points - profile.commit_points) * level_coefficient
 
-        if today_points >= profile.commit_points: 
+        if today_points >= profile.commit_points:
             self.stdout.write(
-                self.style.SUCCESS(f"Today points: {today_points} points, add {bonus_points} to your EXP!"),
+                self.style.SUCCESS(
+                    f"Today points: {today_points} points, add {bonus_points} to your EXP!"
+                ),
             )
-
         else:
             self.stdout.write(
-                self.style.WARNING(f"Today points: {today_points} points, minus {-bonus_points} from your EXP!")
+                self.style.WARNING(
+                    f"Today points: {today_points} points, minus {-bonus_points} from your EXP!"
+                )
             )
-            
+
         new_level, new_exp = up_level(profile, bonus_points)
         profile.level = new_level
         profile.exp = new_exp
