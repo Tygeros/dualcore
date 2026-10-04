@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import DueBadge from "../components/DueBadge";
+import StatusActions from "../components/StatusActions";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
 import CategoryPicker from "../components/CategoryPicker";
@@ -32,7 +33,12 @@ import {
   findSubtree,
   buildTaskTree,
 } from "../utils/taskTree";
-import { localDateString } from "../utils/date";
+import {
+  localDateString,
+  matchesDueFilter,
+  DUE_FILTER_OPTIONS,
+  type DueFilter,
+} from "../utils/date";
 
 const STATUS_OPTIONS: Status[] = [
   "pending",
@@ -68,6 +74,7 @@ export default function Tasks() {
     return p ? Number(p) : "";
   });
   const [filterStatus, setFilterStatus] = useState<Status | "">("");
+  const [filterDue, setFilterDue] = useState<DueFilter>("");
   const [filterCategory, setFilterCategory] = useState<number | "">("");
   const [filterParent, setFilterParent] = useState<number | null>(() => {
     const p = searchParams.get("parent");
@@ -163,8 +170,14 @@ export default function Tasks() {
     setCategories(cats);
   }
 
+  const visibleTasks = useMemo(
+    () =>
+      tasks.filter((t) => matchesDueFilter(t.due_date, t.status, filterDue)),
+    [tasks, filterDue]
+  );
+
   const groups = useMemo(() => {
-    const allGroups = groupTasksByProject(tasks, projects);
+    const allGroups = groupTasksByProject(visibleTasks, projects);
     if (filterParent == null) return allGroups;
 
     return allGroups
@@ -177,7 +190,7 @@ export default function Tasks() {
         };
       })
       .filter(Boolean) as typeof allGroups;
-  }, [tasks, projects, filterParent]);
+  }, [visibleTasks, projects, filterParent]);
 
   const parentTaskInfo = useMemo(() => {
     if (filterParent == null) return null;
@@ -336,6 +349,17 @@ export default function Tasks() {
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+          value={filterDue}
+          onChange={(e) => setFilterDue((e.target.value || "") as DueFilter)}
+        >
+          {DUE_FILTER_OPTIONS.map((o) => (
+            <option key={o.value || "all"} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -599,22 +623,10 @@ export default function Tasks() {
                           className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-neutral-800/60"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <select
-                            className="rounded-lg bg-neutral-950/80 border border-neutral-700/80 px-2 py-1 text-xs text-white focus:border-blue-500 outline-none"
-                            value={t.status}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                t.id,
-                                e.target.value as Status
-                              )
-                            }
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
+                          <StatusActions
+                            status={t.status}
+                            onChange={(s) => handleStatusChange(t.id, s)}
+                          />
                           {(t.status === "pending" ||
                             t.status === "in_progress") && (
                             <button

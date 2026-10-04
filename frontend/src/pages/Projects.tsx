@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -19,12 +19,18 @@ import type {
 } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import DueBadge from "../components/DueBadge";
+import StatusActions from "../components/StatusActions";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
 import CategoryPicker from "../components/CategoryPicker";
 import CategoryBadges from "../components/CategoryBadges";
 import CategoryManager from "../components/CategoryManager";
-import { localDateString } from "../utils/date";
+import {
+  localDateString,
+  matchesDueFilter,
+  DUE_FILTER_OPTIONS,
+  type DueFilter,
+} from "../utils/date";
 
 const STATUS_OPTIONS: Status[] = [
   "pending",
@@ -54,6 +60,8 @@ export default function Projects() {
   const [difficulties, setDifficulties] = useState<Level[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filterCategory, setFilterCategory] = useState<number | "">("");
+  const [filterStatus, setFilterStatus] = useState<Status | "">("");
+  const [filterDue, setFilterDue] = useState<DueFilter>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -73,10 +81,11 @@ export default function Projects() {
     setLoading(true);
     setError(null);
     try {
-      const params =
-        filterCategory !== "" ? { category: filterCategory } : undefined;
+      const params: { category?: number; status?: Status } = {};
+      if (filterCategory !== "") params.category = filterCategory;
+      if (filterStatus !== "") params.status = filterStatus;
       const [projs, pris, diffs, cats] = await Promise.all([
-        getProjects(params),
+        getProjects(Object.keys(params).length ? params : undefined),
         getPriorityLevels(),
         getDifficultyLevels(),
         getCategories(),
@@ -103,7 +112,7 @@ export default function Projects() {
     } finally {
       setLoading(false);
     }
-  }, [filterCategory]);
+  }, [filterCategory, filterStatus]);
 
   useEffect(() => {
     load();
@@ -178,6 +187,12 @@ export default function Projects() {
     navigate(`/tasks?project=${id}`);
   }
 
+  const visibleProjects = useMemo(
+    () =>
+      projects.filter((p) => matchesDueFilter(p.due_date, p.status, filterDue)),
+    [projects, filterDue]
+  );
+
   if (loading && projects.length === 0) return <Loading />;
 
   return (
@@ -196,6 +211,31 @@ export default function Projects() {
       <CategoryManager categories={categories} onChange={reloadCategories} />
 
       <div className="flex flex-wrap gap-2">
+        <select
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+          value={filterStatus}
+          onChange={(e) =>
+            setFilterStatus((e.target.value || "") as Status | "")
+          }
+        >
+          <option value="">All statuses</option>
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select
+          className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+          value={filterDue}
+          onChange={(e) => setFilterDue((e.target.value || "") as DueFilter)}
+        >
+          {DUE_FILTER_OPTIONS.map((o) => (
+            <option key={o.value || "all"} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <select
           className="rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
           value={filterCategory}
@@ -314,14 +354,14 @@ export default function Projects() {
         </form>
       )}
 
-      {projects.length === 0 ? (
+      {visibleProjects.length === 0 ? (
         <EmptyState
           title="Chưa có project nào"
           description="Tạo project đầu tiên để bắt đầu."
         />
       ) : (
         <ul className="space-y-3">
-          {projects.map((p) => (
+          {visibleProjects.map((p) => (
             <li
               key={p.id}
               role="button"
@@ -371,19 +411,10 @@ export default function Projects() {
                 className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-neutral-800/60"
                 onClick={(e) => e.stopPropagation()}
               >
-                <select
-                  className="rounded-lg bg-neutral-950/80 border border-neutral-700/80 px-2 py-1 text-xs text-white focus:border-blue-500 outline-none"
-                  value={p.status}
-                  onChange={(e) =>
-                    handleStatusChange(p.id, e.target.value as Status)
-                  }
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <StatusActions
+                  status={p.status}
+                  onChange={(s) => handleStatusChange(p.id, s)}
+                />
                 <button
                   type="button"
                   onClick={() => handleDelete(p.id)}
